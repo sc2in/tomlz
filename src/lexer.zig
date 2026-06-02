@@ -188,7 +188,7 @@ pub const Lexer = struct {
 
     fn parseMultiline(self: *Lexer, typ: Quotation) Error!TokLoc {
         const loc = self.loc;
-        var al = std.ArrayListUnmanaged(u8){};
+        var al = std.ArrayListUnmanaged(u8).empty;
         var first = true;
         while (true) {
             const c = self.pop() catch |err| switch (err) {
@@ -310,7 +310,7 @@ pub const Lexer = struct {
         }
 
         const loc = self.loc;
-        var al = std.ArrayListUnmanaged(u8){};
+        var al = std.ArrayListUnmanaged(u8).empty;
         while (true) {
             const c = self.pop() catch |err| switch (err) {
                 error.EOF => return error.StringNotEnded,
@@ -347,7 +347,7 @@ pub const Lexer = struct {
     /// parseKey parses a key. A key can only contain [A-Za-z0-9-_]
     fn parseKey(self: *Lexer) Error!TokLoc {
         const loc = self.loc;
-        var al = std.ArrayListUnmanaged(u8){};
+        var al = std.ArrayListUnmanaged(u8).empty;
         while (true) {
             const c = self.peek() catch |err| {
                 switch (err) {
@@ -689,7 +689,7 @@ fn readAllTokens(src: []const u8) ![]const Tok {
     var lexer = try Lexer.init(testing.allocator, src);
     defer lexer.deinit();
 
-    var al = std.ArrayListUnmanaged(Tok){};
+    var al = std.ArrayListUnmanaged(Tok).empty;
     while (try lexer.next(false)) |tok_loc| {
         try al.append(testing.allocator, try tok_loc.tok.dupe(testing.allocator));
     }
