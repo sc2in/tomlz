@@ -1,7 +1,7 @@
 const std = @import("std");
 const ascci = std.ascii;
-
 const Allocator = std.mem.Allocator;
+const testing = std.testing;
 
 /// Serialize a value to the given out_stream.
 ///
@@ -203,8 +203,8 @@ pub fn WriteStream(
                 .out_stream = out_stream,
                 .allocator = allocator,
                 .key_stack = switch (max_depth) {
-                    .arbitrary => std.ArrayList([]const u8){},
-                    .fixed => |depth| [_]?[]const u8{null} ** depth,
+                    .arbitrary => .empty,
+                    .fixed => @splat(null),
                 },
             };
         }
@@ -262,9 +262,9 @@ pub fn WriteStream(
 
                     const info = @typeInfo(T).@"union";
                     if (info.tag_type) |UnionTagType| {
-                        inline for (info.fields) |u_field| {
-                            if (value == @field(UnionTagType, u_field.name)) {
-                                try self.write(@field(value, u_field.name));
+                        inline for (info.field_names) |name| {
+                            if (value == @field(UnionTagType, name)) {
+                                try self.write(@field(value, name));
                                 break;
                             }
                         } else {
@@ -283,7 +283,7 @@ pub fn WriteStream(
                             return self.write(@as(Slice, value));
                         },
                         else => {
-                            return self.write(value.*);
+                            return self.write(@as(T, value));
                         },
                     },
                     .many, .slice => {
@@ -424,31 +424,31 @@ pub fn WriteStream(
             const T = @TypeOf(value);
             const S = @typeInfo(T).@"struct";
 
-            if (S.fields.len == 1 and @typeInfo(S.fields[0].type) == .@"struct") {
-                const field = S.fields[0];
-                try self.pushKey(field.name);
-                try self.writeTable(@field(value, field.name));
+            if (S.field_names.len == 1 and @typeInfo(S.field_types[0]) == .@"struct") {
+                const field = S.field_names[0];
+                try self.pushKey(field);
+                try self.writeTable(@field(value, field));
                 self.popKey();
                 return;
             }
 
             try self.beginTable();
 
-            inline for (S.fields) |Field| {
-                if (comptime !canInline(Field.type)) continue;
+            inline for (S.field_names, S.field_types) |name, typ| {
+                if (comptime !canInline(typ)) continue;
 
-                try self.pushKey(Field.name);
+                try self.pushKey(name);
                 try self.beginAssignment();
-                try self.writeInline(@field(value, Field.name));
+                try self.writeInline(@field(value, name));
                 try self.out_stream.writeByte('\n');
                 self.popKey();
             }
 
-            inline for (S.fields) |Field| {
-                if (comptime canInline(Field.type)) continue;
+            inline for (S.field_names, S.field_types) |name, typ| {
+                if (comptime canInline(typ)) continue;
 
-                try self.pushKey(Field.name);
-                try self.write(@field(value, Field.name));
+                try self.pushKey(name);
+                try self.write(@field(value, name));
                 self.popKey();
             }
         }
@@ -585,14 +585,12 @@ fn canInline(comptime T: type) bool {
     };
 }
 
-const testing = std.testing;
-
 fn testWriteStream(value: anytype, key: ?[]const u8, expected: []const u8) !void {
-    var buffer = std.ArrayList(u8){};
+    var buffer: std.ArrayList(u8) = .empty;
     defer buffer.deinit(testing.allocator);
 
-    const writer = buffer.writer(testing.allocator);
-
+    var writer: std.Io.Writer = .fromArrayList(&buffer);
+    defer writer.flush() catch {};
     if (key) |payload| {
         try serializeKeyValue(testing.allocator, writer, payload, value);
     } else {
@@ -603,8 +601,8 @@ fn testWriteStream(value: anytype, key: ?[]const u8, expected: []const u8) !void
 }
 
 fn testWriteStreamFailure(value: anytype, key: ?[]const u8, err: anyerror) !void {
-    var buffer = std.ArrayList(u8).init(testing.allocator);
-    defer buffer.deinit();
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(testing.allocator);
 
     const writer = buffer.writer();
 
@@ -867,10 +865,11 @@ test "encode correctly quote keys" {
 
 test "test write stream fixed depth" {
     {
-        var buffer = std.ArrayList(u8){};
+        var buffer: std.ArrayList(u8) = .empty;
         defer buffer.deinit(testing.allocator);
 
-        const writer = buffer.writer(testing.allocator);
+        var writer: std.Io.Writer = .fromArrayList(&buffer);
+        defer writer.flush() catch unreachable;
 
         try serializeKeyValueFixedDepth(2, writer, "mykey", .{ .one = 1, .two = 2, .three = 3 });
 
@@ -883,10 +882,11 @@ test "test write stream fixed depth" {
         , buffer.items);
     }
     {
-        var buffer = std.ArrayList(u8){};
+        var buffer: std.ArrayList(u8) = .empty;
         defer buffer.deinit(testing.allocator);
 
-        const writer = buffer.writer(testing.allocator);
+        var writer: std.Io.Writer = .fromArrayList(&buffer);
+        defer writer.flush() catch unreachable;
 
         var stream = writeStreamFixedDepth(2, writer);
         defer stream.deinit();

@@ -23,7 +23,7 @@
   }: let
     overlays = [
       (final: prev: {
-        zigpkgs = zig.packages.${prev.system};
+        zigpkgs = zig.packages.${prev.stdenv.hostPlatform.system};
       })
     ];
     systems = builtins.attrNames zig.packages;
@@ -34,7 +34,7 @@
       in {
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            zigpkgs."0.15.2"
+            zigpkgs."0.17.0"
             zls
             bashInteractive
             gdb

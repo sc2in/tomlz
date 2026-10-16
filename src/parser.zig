@@ -1,9 +1,9 @@
 const std = @import("std");
-const lex = @import("lexer.zig");
 const testing = std.testing;
-
-const LexError = lex.Lexer.Error;
 const AllocError = std.mem.Allocator.Error;
+
+const lex = @import("lexer.zig");
+const LexError = lex.Lexer.Error;
 
 pub const ParseError = error{
     UnexpectedToken,
@@ -358,21 +358,21 @@ fn decodeValue(comptime T: type, gpa: std.mem.Allocator, v: Value) DecodingError
 fn decodeTable(comptime T: anytype, gpa: std.mem.Allocator, table: Table) DecodingError!T {
     const ti = @typeInfo(T);
     if (ti != .@"struct") return DecodingError.MismatchedType;
-
+    const s = @typeInfo(T).@"struct";
     var strct: T = undefined;
 
-    inline for (ti.@"struct".fields) |f| {
-        const f_ti = @typeInfo(f.type);
-        if (!table.contains(f.name)) {
+    inline for (s.field_names, s.field_types, s.field_attrs) |name, typ, attr| {
+        const f_ti = @typeInfo(typ);
+        if (!table.contains(name)) {
             if (f_ti == .optional)
-                @field(strct, f.name) = null
-            else if (f.default_value_ptr) |default_ptr| {
-                const default = @as(*align(1) const f.type, @ptrCast(default_ptr)).*;
-                @field(strct, f.name) = default;
+                @field(strct, name) = null
+            else if (attr.default_value_ptr) |default_ptr| {
+                const default = @as(*align(1) const typ, @ptrCast(default_ptr)).*;
+                @field(strct, name) = default;
             } else return DecodingError.MissingField;
         } else {
-            const v = table.table.get(f.name).?;
-            @field(strct, f.name) = try decodeValue(f.type, gpa, v);
+            const v = table.table.get(name).?;
+            @field(strct, name) = try decodeValue(typ, gpa, v);
         }
     }
 
