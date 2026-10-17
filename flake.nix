@@ -134,20 +134,6 @@
           };
         };
         apps = {
-          sbom = let
-            app = pkgs.writeShellApplication {
-              name = "sbom";
-              runtimeInputs = [pkgs.git pkgs.jq];
-              text = ''
-                cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-                exec bash tools/sbom.sh "$@"
-              '';
-            };
-          in {
-            type = "app";
-            program = "${app}/bin/sbom";
-            meta.description = "Generate a CycloneDX SBOM of compiled-in Zig dependencies";
-          };
           bump = let
             bump-app = pkgs.writeShellApplication {
               name = "bump";
