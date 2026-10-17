@@ -164,9 +164,9 @@ fn testFile(io: std.Io, dir: *const std.Io.Dir, basename: []const u8) !parser.Ta
     var f = try dir.openFile(io, basename, .{});
     defer f.close(io);
     var buf: [4096]u8 = undefined;
-    var fw = f.readerStreaming(io, &buf).interface;
+    var file_reader = f.readerStreaming(io, &buf);
 
-    const contents = try fw.allocRemaining(testing.allocator, .unlimited);
+    const contents = try file_reader.interface.allocRemaining(testing.allocator, .unlimited);
     defer testing.allocator.free(contents);
 
     return try parser.parse(testing.allocator, contents);
@@ -210,9 +210,9 @@ fn testValid(io: std.Io, dir: *const std.Io.Dir, path: []const u8, basename: []c
     var f = try dir.openFile(io, json_path, .{});
     defer f.close(io);
 
-    var reader = f.reader(io, &buf).interface;
+    var file_reader = f.reader(io, &buf);
 
-    const contents = try reader.readAlloc(testing.allocator, 5 * 1024 * 1024);
+    const contents = try file_reader.interface.allocRemaining(testing.allocator, .unlimited);
     defer testing.allocator.free(contents);
 
     var expected = try std.json.parseFromSlice(std.json.Value, testing.allocator, contents, .{});
@@ -278,14 +278,11 @@ test "fuzz" {
     while (try walker.next(io)) |entry| {
         if (entry.kind != .file) continue;
 
-        const len = try entry.dir.realPath(io, &buf);
-        const full_path = buf[0..len];
-
-        var f = try entry.dir.openFile(io, full_path, .{});
+        var f = try entry.dir.openFile(io, entry.basename, .{});
         defer f.close(io);
 
-        var reader = f.reader(io, &buf).interface;
-        const contents = try reader.readAlloc(testing.allocator, 1024);
+        var file_reader = f.reader(io, &buf);
+        const contents = try file_reader.interface.allocRemaining(testing.allocator, .unlimited);
         defer testing.allocator.free(contents);
 
         // We just want to make sure we don't crash when parsing these

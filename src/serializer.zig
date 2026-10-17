@@ -12,10 +12,10 @@ const testing = std.testing;
 ///
 /// # Example
 /// ```
-/// const std = @import("std")
+/// const std = @import("std");
 /// const tomlz = @import("tomlz");
 ///
-/// var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+/// var gpa_instance: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
 /// defer _ = gpa_instance.deinit();
 ///
 /// const point = .{
@@ -23,21 +23,27 @@ const testing = std.testing;
 ///     .y=2,
 /// };
 ///
+/// const io = init.io; // from `pub fn main(init: std.process.Init) !void`
+/// var stdout_buffer: [1024]u8 = undefined;
+/// var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
+/// const stdout = &stdout_writer.interface;
 /// try tomlz.serialize(
 ///     gpa_instance.allocator(),
-///     std.io.getStdOut().writer(),
+///     stdout,
 ///     point,
 /// );
+///
+/// try stdout.flush();
 ///
 /// // Output:
 /// // x = 4
 /// // y = 2
-/// ````
+/// ```
 pub fn serialize(
     allocator: Allocator,
-    out_stream: anytype,
+    out_stream: *std.Io.Writer,
     value: anytype,
-) (@TypeOf(out_stream).Error || SerializeError || Allocator.Error)!void {
+) (std.Io.Writer.Error || SerializeError || Allocator.Error)!void {
     var toml_writer = writeStream(allocator, out_stream);
     defer toml_writer.deinit();
     try toml_writer.write(value);
@@ -52,9 +58,9 @@ pub fn serialize(
 /// its not the default.
 pub fn serializeFixedDepth(
     comptime depth: usize,
-    out_stream: anytype,
+    out_stream: *std.Io.Writer,
     value: anytype,
-) (@TypeOf(out_stream).Error || SerializeError)!void {
+) (std.Io.Writer.Error || SerializeError)!void {
     var toml_writer = writeStreamFixedDepth(depth, out_stream);
     defer toml_writer.deinit();
     try toml_writer.write(value);
@@ -67,30 +73,36 @@ pub fn serializeFixedDepth(
 /// For a fixed-depth version that doesn't require an allocator, see `serializeKeyValueFixedDepth`.
 /// # Example
 /// ```
-/// const std = @import("std")
+/// const std = @import("std");
 /// const tomlz = @import("tomlz");
 ///
-/// var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+/// var gpa_instance: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
 /// defer _ = gpa_instance.deinit();
 ///
 /// const mynumber = 42;
 ///
+/// const io = init.io; // from `pub fn main(init: std.process.Init) !void`
+/// var stdout_buffer: [1024]u8 = undefined;
+/// var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
+/// const stdout = &stdout_writer.interface;
 /// try tomlz.serializeKeyValue(
 ///     gpa_instance.allocator(),
-///     std.io.getStdOut().writer(),
+///     stdout,
 ///     "some_key",
 ///     mynumber
 /// );
 ///
+/// try stdout.flush();
+///
 /// // Output:
 /// // mynumber = 42
-/// ````
+/// ```
 pub fn serializeKeyValue(
     allocator: Allocator,
-    out_stream: anytype,
+    out_stream: *std.Io.Writer,
     key: []const u8,
     value: anytype,
-) (@TypeOf(out_stream).Error || SerializeError || Allocator.Error)!void {
+) (std.Io.Writer.Error || SerializeError || Allocator.Error)!void {
     var toml_writer = writeStream(allocator, out_stream);
     defer toml_writer.deinit();
     try toml_writer.writeKeyValue(key, value);
@@ -105,10 +117,10 @@ pub fn serializeKeyValue(
 /// its not the default.
 pub fn serializeKeyValueFixedDepth(
     comptime depth: usize,
-    out_stream: anytype,
+    out_stream: *std.Io.Writer,
     key: []const u8,
     value: anytype,
-) (@TypeOf(out_stream).Error || SerializeError)!void {
+) (std.Io.Writer.Error || SerializeError)!void {
     var toml_writer = writeStreamFixedDepth(depth, out_stream);
     defer toml_writer.deinit();
     try toml_writer.writeKeyValue(key, value);
@@ -116,9 +128,9 @@ pub fn serializeKeyValueFixedDepth(
 
 pub fn writeStream(
     allocator: Allocator,
-    out_stream: anytype,
-) WriteStream(@TypeOf(out_stream), .arbitrary) {
-    return WriteStream(@TypeOf(out_stream), .arbitrary).init(
+    out_stream: *std.Io.Writer,
+) WriteStream(.arbitrary) {
+    return WriteStream(.arbitrary).init(
         allocator,
         out_stream,
     );
@@ -126,10 +138,9 @@ pub fn writeStream(
 
 pub fn writeStreamFixedDepth(
     comptime depth: usize,
-    out_stream: anytype,
-) WriteStream(@TypeOf(out_stream), .{ .fixed = depth }) {
+    out_stream: *std.Io.Writer,
+) WriteStream(.{ .fixed = depth }) {
     return WriteStream(
-        @TypeOf(out_stream),
         .{ .fixed = depth },
     ).init(
         undefined,
@@ -145,7 +156,6 @@ pub const SerializeError = error{
 };
 
 pub fn WriteStream(
-    comptime OutStream: type,
     comptime max_depth: union(enum) {
         arbitrary,
         fixed: usize,
@@ -155,11 +165,11 @@ pub fn WriteStream(
         const Self = @This();
 
         const Error = switch (max_depth) {
-            .arbitrary => OutStream.Error || SerializeError || Allocator.Error,
-            .fixed => OutStream.Error || SerializeError,
+            .arbitrary => std.Io.Writer.Error || SerializeError || Allocator.Error,
+            .fixed => std.Io.Writer.Error || SerializeError,
         };
         allocator: Allocator,
-        out_stream: OutStream,
+        out_stream: *std.Io.Writer,
 
         /// Keeps track of all the sub-keys making up the current key.
         ///
@@ -198,7 +208,7 @@ pub fn WriteStream(
         array_depth: usize = 0,
 
         /// Create a new WriteStream. If this is fixed-depth, key_allocator can be undefined.
-        pub fn init(allocator: Allocator, out_stream: OutStream) Self {
+        pub fn init(allocator: Allocator, out_stream: *std.Io.Writer) Self {
             return .{
                 .out_stream = out_stream,
                 .allocator = allocator,
@@ -283,7 +293,7 @@ pub fn WriteStream(
                             return self.write(@as(Slice, value));
                         },
                         else => {
-                            return self.write(@as(T, value));
+                            return self.write(value.*);
                         },
                     },
                     .many, .slice => {
@@ -561,7 +571,7 @@ pub fn WriteStream(
         //
         // Does NOT free the keys themselves.
         pub fn deinit(self: *Self) void {
-            if (max_depth == .arbitrary) self.key_stack.deinit(testing.allocator);
+            if (max_depth == .arbitrary) self.key_stack.deinit(self.allocator);
 
             self.* = undefined;
         }
@@ -586,18 +596,17 @@ fn canInline(comptime T: type) bool {
 }
 
 fn testWriteStream(value: anytype, key: ?[]const u8, expected: []const u8) !void {
-    var buffer: std.ArrayList(u8) = .empty;
-    defer buffer.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer aw.deinit();
 
-    var writer: std.Io.Writer = .fromArrayList(&buffer);
-    defer writer.flush() catch {};
+    const writer = &aw.writer;
     if (key) |payload| {
         try serializeKeyValue(testing.allocator, writer, payload, value);
     } else {
         try serialize(testing.allocator, writer, value);
     }
 
-    try testing.expectEqualStrings(expected, buffer.items);
+    try testing.expectEqualStrings(expected, aw.written());
 }
 
 fn testWriteStreamFailure(value: anytype, key: ?[]const u8, err: anyerror) !void {
@@ -641,7 +650,9 @@ test "encode basic types" {
     try testWriteStream(SomeError.TerriblyWrong, "value", "value = \"TerriblyWrong\"\n");
 
     // pointers
-    try testWriteStream(&&5, "value", "value = 5\n");
+    var five: u8 = 5;
+    var five_ptr: *u8 = &five;
+    try testWriteStream(&five_ptr, "value", "value = 5\n");
 
     // optionals
     try testWriteStream(@as(?u16, 42), "value", "value = 42\n");
@@ -865,13 +876,10 @@ test "encode correctly quote keys" {
 
 test "test write stream fixed depth" {
     {
-        var buffer: std.ArrayList(u8) = .empty;
-        defer buffer.deinit(testing.allocator);
+        var aw: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer aw.deinit();
 
-        var writer: std.Io.Writer = .fromArrayList(&buffer);
-        defer writer.flush() catch unreachable;
-
-        try serializeKeyValueFixedDepth(2, writer, "mykey", .{ .one = 1, .two = 2, .three = 3 });
+        try serializeKeyValueFixedDepth(2, &aw.writer, "mykey", .{ .one = 1, .two = 2, .three = 3 });
 
         try testing.expectEqualStrings(
             \\[mykey]
@@ -879,16 +887,13 @@ test "test write stream fixed depth" {
             \\two = 2
             \\three = 3
             \\
-        , buffer.items);
+        , aw.written());
     }
     {
-        var buffer: std.ArrayList(u8) = .empty;
-        defer buffer.deinit(testing.allocator);
+        var aw: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer aw.deinit();
 
-        var writer: std.Io.Writer = .fromArrayList(&buffer);
-        defer writer.flush() catch unreachable;
-
-        var stream = writeStreamFixedDepth(2, writer);
+        var stream = writeStreamFixedDepth(2, &aw.writer);
         defer stream.deinit();
 
         const result = stream.writeKeyValue("mykey", .{

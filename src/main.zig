@@ -19,10 +19,10 @@ pub const Table = parser.Table;
 ///
 /// # Example
 /// ```
-/// const std = @import("std")
+/// const std = @import("std");
 /// const tomlz = @import("tomlz");
 ///
-/// var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+/// var gpa_instance: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
 /// defer _ = gpa_instance.deinit();
 ///
 /// const point = .{
@@ -30,16 +30,22 @@ pub const Table = parser.Table;
 ///     .y=2,
 /// };
 ///
+/// const io = init.io; // from `pub fn main(init: std.process.Init) !void`
+/// var stdout_buffer: [1024]u8 = undefined;
+/// var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
+/// const stdout = &stdout_writer.interface;
 /// try tomlz.serialize(
 ///     gpa_instance.allocator(),
-///     std.io.getStdOut().writer(),
+///     stdout,
 ///     point,
 /// );
+///
+/// try stdout.flush();
 ///
 /// // Output:
 /// // x = 4
 /// // y = 2
-/// ````
+/// ```
 pub const serialize = serializer.serialize;
 
 /// Serialize a key-value pair to the given out_stream.
@@ -49,24 +55,30 @@ pub const serialize = serializer.serialize;
 /// For a fixed-depth version that doesn't require an allocator, see `serializer.serializeKeyValueFixedDepth`.
 /// # Example
 /// ```
-/// const std = @import("std")
+/// const std = @import("std");
 /// const tomlz = @import("tomlz");
 ///
-/// var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+/// var gpa_instance: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
 /// defer _ = gpa_instance.deinit();
 ///
 /// const mynumber = 42;
 ///
+/// const io = init.io; // from `pub fn main(init: std.process.Init) !void`
+/// var stdout_buffer: [1024]u8 = undefined;
+/// var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
+/// const stdout = &stdout_writer.interface;
 /// try tomlz.serializeKeyValue(
 ///     gpa_instance.allocator(),
-///     std.io.getStdOut().writer(),
+///     stdout,
 ///     "some_key",
 ///     mynumber
 /// );
 ///
+/// try stdout.flush();
+///
 /// // Output:
 /// // mynumber = 42
-/// ````
+/// ```
 pub const serializeKeyValue = serializer.serializeKeyValue;
 
 test "refAllDecls" {
