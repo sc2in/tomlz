@@ -1,19 +1,20 @@
 const std = @import("std");
 const testing = std.testing;
+
 const lex = @import("lexer.zig");
 const parser = @import("parser.zig");
 
-export fn cmain() void {
-    main() catch unreachable;
-}
+// export fn cmain() void {
+//     main(.{}) catch unreachable;
+// }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.debug.assert(gpa.deinit() == .ok);
-    var allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    var safe: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
+    defer _ = safe.deinit();
+    const allocator = safe.allocator();
 
     var stdin_buffer: [1024]u8 = undefined;
-    var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+    var stdin_reader = std.Io.File.stdin().reader(init.io, &stdin_buffer);
     const stdin = &stdin_reader.interface;
     const data = try stdin.readAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(data);

@@ -9,7 +9,7 @@ pub fn main() !void {
         \\world_titles = [2001, 2004, 2008, 2012, 2013, 2020, 2022]
     ;
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
     defer _ = gpa.deinit();
 
     var table = try tomlz.parse(gpa.allocator(), toml);
