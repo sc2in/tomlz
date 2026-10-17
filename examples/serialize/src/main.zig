@@ -1,13 +1,15 @@
 const std = @import("std");
 const tomlz = @import("tomlz");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     // setup a basic allocator
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa_instance: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
-    const stdout_writer = std.io.getStdOut().writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_file = std.Io.File.stdout().writer(init.io, &stdout_buffer);
+    const stdout_writer = &stdout_file.interface;
 
     // anything that isn't a table(numbers, strings, etc)
     // need to be written with a key
@@ -52,4 +54,5 @@ pub fn main() !void {
     // In a lot of cases you can just use a "big" number like 64 here and it'll work
     // but we can't make that assumption for you, so the default uses an allocator to
     // allow for arbitrarily deep types.
+    try stdout_writer.flush();
 }

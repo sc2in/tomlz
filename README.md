@@ -25,11 +25,15 @@ const s = try tomlz.decode(S, gpa,
 );
 
 // serialize a value like this (also see the examples)
+var stdout_buffer: [1024]u8 = undefined;
+var stdout_writer = std.Io.File.stdout().writer(init.io, &stdout_buffer);
+const stdout = &stdout_writer.interface;
 try tomlz.serialize(
     gpa,
-    std.io.getStdout.writer()
+    stdout,
     s,
 );
+try stdout.flush();
 // foo = 1
 // bar = 2
 ```

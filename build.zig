@@ -35,7 +35,6 @@ pub fn build(b: *std.Build) !void {
         .root_module = fuzz,
     });
     fuzz_exe.root_module.link_libc = true;
-    b.installArtifact(fuzz_exe);
     const fuzz_compile_run = b.step("fuzz", "Build executable for fuzz testing afl-fuzz");
     fuzz_compile_run.dependOn(&fuzz_exe.step);
 }

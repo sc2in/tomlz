@@ -1,13 +1,15 @@
 const std = @import("std");
 const tomlz = @import("tomlz");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     // setup a basic allocator
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa_instance: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
-    const stdout_writer = std.io.getStdOut().writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_file = std.Io.File.stdout().writer(init.io, &stdout_buffer);
+    const stdout_writer = &stdout_file.interface;
 
     // structs and unions can have their default serialize function overwritten like this
     // see `tomlz.serializer.Writer` for documentation on the writer
@@ -80,4 +82,5 @@ pub fn main() !void {
     // If you're now wondering "But what if it's a very big foreign type,
     // but only in a few cases the default doesnt work?". Sadly you're out of luck
     // and need to handle the whole type :/
+    try stdout_writer.flush();
 }
