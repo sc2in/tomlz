@@ -8,6 +8,8 @@ same stability guarantee.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-17
+
 ### Chores
 
 - Update to Zig 0.17.0
